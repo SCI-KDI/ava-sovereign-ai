@@ -1,0 +1,67 @@
+# Local evaluation only: not the production architecture and not hardened.
+# Start: cp .env.example .env && docker compose up -d, then open http://localhost:3000
+# Open WebUI branding is deliberately left unchanged; see docs/third-party-licenses.md.
+services:
+  postgres:
+    # PostgreSQL with pgvector: one database for accounts, chats and document vectors.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ava
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?copy .env.example to .env}
+      POSTGRES_DB: ava
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ava -d ava"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ollama:
+    # Runs a small model on your CPU or GPU. In production, models are served separately.
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+
+  model-pull:
+    # Downloads OLLAMA_MODEL once, then exits.
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "sleep 5 && ollama pull \"$$OLLAMA_MODEL\""]
+    env_file: .env
+    restart: "no"
+
+  tika:
+    # Extracts text from uploaded PDF, Word and other documents.
+    image: apache/tika:latest-full
+
+  open-webui:
+    # Pin the version you have tested. AVA's extensions were tested with this one.
+    image: ghcr.io/open-webui/open-webui:v0.12.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      tika:
+        condition: service_started
+    ports:
+      - "127.0.0.1:3000:8080"
+    environment:
+      DATABASE_URL: postgresql://ava:${POSTGRES_PASSWORD}@postgres:5432/ava
+      VECTOR_DB: pgvector
+      PGVECTOR_DB_URL: postgresql://ava:${POSTGRES_PASSWORD}@postgres:5432/ava
+      OLLAMA_BASE_URL: http://ollama:11434
+      CONTENT_EXTRACTION_ENGINE: tika
+      TIKA_SERVER_URL: http://tika:9998
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?copy .env.example to .env}
+    volumes:
+      - open-webui:/app/backend/data
+
+volumes:
+  postgres:
+  ollama:
+  open-webui:

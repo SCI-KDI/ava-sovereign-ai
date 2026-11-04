@@ -1,0 +1,10 @@
+.env
+*.pem
+*.key
+*.crt
+values.local.yaml
+.preflight-denylist
+__pycache__/
+.venv/
+node_modules/
+.DS_Store

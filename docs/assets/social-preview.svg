@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <rect width="1280" height="640" fill="#14171c"/>
+  <path d="M430 640 L760 470 L880 540 L1060 370 L1190 500 L1280 450 L1280 640 Z" fill="#242a33"/>
+  <path d="M1060 370 L1015 412 L1048 402 L1068 422 L1105 412 Z" fill="#e8eaed"/>
+  <rect x="96" y="96" width="14" height="118" fill="#e2001a"/>
+  <text x="134" y="194" font-family="DejaVu Sans, Arial, sans-serif" font-size="112" font-weight="700" fill="#ffffff">AVA</text>
+  <text x="96" y="286" font-family="DejaVu Sans, Arial, sans-serif" font-size="38" fill="#e8eaed">The AI assistant a Swiss canton runs</text>
+  <text x="96" y="336" font-family="DejaVu Sans, Arial, sans-serif" font-size="38" fill="#e8eaed">for its civil servants, as an open blueprint</text>
+  <text x="96" y="580" font-family="DejaVu Sans, Arial, sans-serif" font-size="25" fill="#c4c9d1">Open-weight models · Hybrid RAG · Specialist assistants</text>
+</svg>

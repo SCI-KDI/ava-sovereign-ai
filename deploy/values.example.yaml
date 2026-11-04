@@ -1,0 +1,178 @@
+# Example values for the official Open WebUI Helm chart, close to what AVA runs.
+#   helm repo add open-webui https://open-webui.github.io/helm-charts
+#   helm show values open-webui/open-webui > upstream-values.yaml   # compare key names with your chart version
+# Copy this file to values.local.yaml (ignored by git), then replace every example.org value.
+# Secrets come from the Secret in secret.example.yaml. Never put them in this file.
+
+image:
+  tag: "v0.12.4" # The exact version you have tested. Never "latest" or "main".
+
+replicaCount: 1 # We run one replica. Above 1, Redis is mandatory (below) and the secret key must be shared.
+
+# Upgrades run database migrations at start-up: never let two versions run at once.
+# Check your chart version for the name of this key.
+strategy:
+  type: Recreate
+
+ollama:
+  enabled: false # Models are served separately; see docs/models.md
+pipelines:
+  enabled: false # AVA uses native tools and filters, not Pipelines
+tika:
+  enabled: true # Text extraction from uploads. Give it 1 to 4 GiB of memory.
+
+resources: # Our production sizing for about 2,000 users. Measure yours.
+  requests:
+    memory: 2Gi
+  limits:
+    memory: 12Gi
+    cpu: "2"
+
+persistence:
+  enabled: true
+  size: 15Gi # Uploaded files and caches. A PVC can grow but never shrink: start large enough.
+  # storageClass: your-storage-class
+
+ingress:
+  enabled: true
+  host: ava.example.org
+  annotations:
+    # Long transcriptions and delegated research exceed the default timeouts.
+    # nginx ingress:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "200m"
+    # OpenShift route equivalent: haproxy.router.openshift.io/timeout: 10m
+
+# Main model connection. You can also add or change connections later in
+# Admin Panel > Settings > Connections.
+openaiBaseApiUrl: "https://llm.example.org/v1"
+
+extraEnvVars:
+  # --- General -----------------------------------------------------------
+  - name: WEBUI_URL
+    value: "https://ava.example.org"
+  - name: CORS_ALLOW_ORIGIN
+    value: "https://ava.example.org"
+  - name: DEFAULT_LOCALE
+    value: "fr"
+  - name: WEBUI_SECRET_KEY # Same value on every replica, or sessions break.
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: webui-secret-key }
+  - name: OPENAI_API_KEY
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: llm-api-key }
+
+  # --- Database and vectors ----------------------------------------------
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: database-url }
+  - name: VECTOR_DB
+    value: "pgvector"
+  - name: PGVECTOR_DB_URL
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: database-url }
+
+  # --- Redis (or Valkey) and websockets ------------------------------------
+  # Needed for several replicas, and for stopping running tasks reliably.
+  # Two database indexes: 0 for state, 1 for websocket messages.
+  - name: REDIS_URL
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: redis-url }
+  - name: ENABLE_WEBSOCKET_SUPPORT
+    value: "true"
+  - name: WEBSOCKET_MANAGER
+    value: "redis"
+  - name: WEBSOCKET_REDIS_URL
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: websocket-redis-url }
+
+  # --- Single sign-on (OIDC) only ------------------------------------------
+  # Before turning off the login form, check that an administrator can sign in through SSO.
+  - name: ENABLE_LOGIN_FORM
+    value: "false"
+  - name: ENABLE_PASSWORD_AUTH
+    value: "false"
+  - name: ENABLE_OAUTH_SIGNUP
+    value: "true"
+  - name: OPENID_PROVIDER_URL
+    value: "https://sso.example.org/realms/example/.well-known/openid-configuration"
+  - name: OPENID_REDIRECT_URI
+    value: "https://ava.example.org/oauth/oidc/callback"
+  - name: OAUTH_PROVIDER_NAME
+    value: "SSO"
+  - name: OAUTH_SCOPES
+    value: "openid email profile"
+  - name: OAUTH_CODE_CHALLENGE_METHOD
+    value: "S256"
+  - name: OAUTH_EMAIL_CLAIM
+    value: "email"
+  - name: OAUTH_USERNAME_CLAIM
+    value: "preferred_username"
+  - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
+    value: "true"
+  # Groups from the identity provider become Open WebUI groups, to control model access.
+  - name: ENABLE_OAUTH_GROUP_MANAGEMENT
+    value: "true"
+  - name: ENABLE_OAUTH_GROUP_CREATION
+    value: "true"
+  - name: OAUTH_GROUPS_CLAIM
+    value: "groups"
+  - name: OAUTH_CLIENT_ID
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: oidc-client-id }
+  - name: OAUTH_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: oidc-client-secret }
+
+  # --- Cookies -------------------------------------------------------------
+  - name: WEBUI_SESSION_COOKIE_SECURE
+    value: "true"
+  - name: WEBUI_AUTH_COOKIE_SECURE
+    value: "true"
+
+  # --- API keys --------------------------------------------------------------
+  # Users cannot create API keys. Service accounts (for example the website
+  # chatbot gateway) can only reach these endpoints.
+  - name: USER_PERMISSIONS_FEATURES_API_KEYS
+    value: "false"
+  - name: ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS
+    value: "true"
+  - name: API_KEYS_ALLOWED_ENDPOINTS
+    value: "/api/chat/completions,/api/v1/models"
+
+  # --- Corporate CA (only if outbound TLS is inspected by a proxy) -----------
+  # Mount your CA bundle into the pod, then point Python at it.
+  # - name: SSL_CERT_FILE
+  #   value: "/etc/ssl/certs/ca-certificates.crt"
+  # - name: REQUESTS_CA_BUNDLE
+  #   value: "/etc/ssl/certs/ca-certificates.crt"
+
+  # --- Document search -------------------------------------------------------
+  # These are only initial values: after first start, Open WebUI stores its
+  # settings in the database, and Admin Panel > Settings > Documents wins.
+  - name: RAG_EMBEDDING_ENGINE
+    value: "openai"
+  - name: RAG_OPENAI_API_BASE_URL
+    value: "https://llm.example.org/v1"
+  - name: RAG_OPENAI_API_KEY
+    valueFrom:
+      secretKeyRef: { name: ava-secrets, key: llm-api-key }
+  - name: RAG_EMBEDDING_MODEL
+    value: "BAAI/bge-multilingual-gemma2" # Choose before indexing: changing it means re-indexing everything.
+  - name: ENABLE_RAG_HYBRID_SEARCH
+    value: "true"
+  - name: RAG_TOP_K
+    value: "10"
+  - name: RAG_TOP_K_RERANKER
+    value: "5"
+  - name: RAG_RELEVANCE_THRESHOLD
+    value: "0.05" # 0 lets irrelevant passages through.
+
+  # --- Background tasks --------------------------------------------------------
+  # Titles, tags and follow-ups each cost a model call. Use a small task model,
+  # or turn them off; see "Reduce latency" in docs/build-guide.md.
+  # - name: TASK_MODEL_EXTERNAL
+  #   value: "your-small-model-id"
+  # - name: ENABLE_FOLLOW_UP_GENERATION
+  #   value: "false"
